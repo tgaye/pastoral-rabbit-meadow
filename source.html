@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pastoral Rabbit Meadow</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #e6f7ff;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+    </style>
+
+<base target="_self">
+
+
+    <div id="canvas-container"></div>
+
+    <script>
+        const pastoralSketch = (p) => {
+            // System variables
+            let rabbit, flowers = [], butterflies = [], carrots = [];
+            let timeOfDay = 0; // 0-1 representing day/night cycle
+            let bgGradient, groundGradient;
+            let sun, moon;
+            let lastPlantTime = 0;
+            let ambientSound;
+
+            // Color palettes
+            const dayColors = {
+                skyTop: p.color(135, 206, 235),
+                skyBottom: p.color(176, 226, 255),
+                ground: p.color(144, 238, 144),
+                sun: p.color(255, 255, 150)
+            };
+
+            const nightColors = {
+                skyTop: p.color(25, 25, 112),
+                skyBottom: p.color(0, 0, 139),
+                ground: p.color(50, 100, 50),
+                moon: p.color(220, 220, 255)
+            };
+
+            p.preload = () => {
+                // Initialize any assets here if needed
+            };
+
+            p.setup = () => {
+                let canvas = p.createCanvas(p.min(p.windowWidth, 1200), 600);
+                canvas.parent('canvas-container');
+                p.colorMode(p.RGB, 255);
+                p.rectMode(p.CENTER);
+                p.ellipseMode(p.CENTER);
+
+                // Initialize rabbit
+                rabbit = {
+                    x: p.width/2,
+                    y: p.height/2,
+                    size: 40,
+                    earAngle: 0,
+                    hopHeight: 0,
+                    targetX: p.width/2,
+                    targetY: p.height/2,
+                    speed: 2,
+                    isHopping: false
+                };
+
+                // Create initial flowers
+                for (let i = 0; i < 20; i++) {
+                    createFlower(p.random(p.width), p.random(p.height/2, p.height));
+                }
+
+                // Create initial butterflies
+                for (let i = 0; i < 5; i++) {
+                    createButterfly();
+                }
+
+                // Create gradients
+                createGradients();
+
+                // Initialize celestial bodies
+                sun = { x: p.width/4, y: 100, size: 60 };
+                moon = { x: p.width*3/4, y: 100, size: 50 };
+            };
+
+            function createGradients() {
+                bgGradient = p.drawingContext.createLinearGradient(0, 0, 0, p.height);
+                bgGradient.addColorStop(0, p.lerpColor(dayColors.skyTop, nightColors.skyTop, timeOfDay));
+                bgGradient.addColorStop(1, p.lerpColor(dayColors.skyBottom, nightColors.skyBottom, timeOfDay));
+
+                groundGradient = p.drawingContext.createLinearGradient(0, p.height/2, 0, p.height);
+                groundGradient.addColorStop(0, p.lerpColor(dayColors.ground, nightColors.ground, timeOfDay));
+                groundGradient.addColorStop(1, p.lerpColor(p.color(100, 180, 100), p.color(30, 80, 30), timeOfDay));
+            }
+
+            function createFlower(x, y) {
+                const types = ['daisy', 'tulip', 'violet'];
+                flowers.push({
+                    x: x,
+                    y: y,
+                    type: types[p.floor(p.random(types.length))],
+                    size: p.random(0.2, 0.5),
+                    growth: 0,
+                    maxGrowth: p.random(0.8, 1.2),
+                    stemHeight: p.random(30, 60),
+                    color: p.color(p.random(150, 255), p.random(100, 200), p.random(100, 200))
+                });
+            }
+
+            function createButterfly() {
+                butterflies.push({
+                    x: p.random(p.width),
+                    y: p.random(p.height/2),
+                    size: p.random(15, 25),
+                    speed: p.random(1, 3),
+                    angle: p.random(p.TWO_PI),
+                    wingAngle: 0,
+                    wingSpeed: p.random(0.1, 0.3),
+                    targetFlower: p.floor(p.random(flowers.length)),
+                    color: p.color(p.random(200, 255), p.random(100, 200), p.random(100, 200))
+                });
+            }
+
+            function plantCarrot(x, y) {
+                if (p.millis() - lastPlantTime > 1000) { // Limit planting rate
+                    carrots.push({
+                        x: x,
+                        y: y,
+                        growth: 0,
+                        size: 10,
+                        maxSize: p.random(20, 30)
+                    });
+                    lastPlantTime = p.millis();
+                }
+            }
+
+            p.draw = () => {
+                // Update time of day (60 second cycle)
+                timeOfDay = (p.sin(p.frameCount / 1800) * 0.5 + 0.5);
+                createGradients();
+
+                // Draw sky background
+                p.drawingContext.fillStyle = bgGradient;
+                p.drawingContext.fillRect(0, 0, p.width, p.height/2);
+
+                // Draw ground
+                p.drawingContext.fillStyle = groundGradient;
+                p.drawingContext.fillRect(0, p.height/2, p.width, p.height/2);
+
+                // Draw celestial bodies
+                drawCelestialBodies();
+
+                // Update and draw flowers
+                updateFlowers();
+
+                // Update and draw carrots
+                updateCarrots();
+
+                // Update and draw butterflies
+                updateButterflies();
+
+                // Update and draw rabbit
+                updateRabbit();
+
+                // Add some atmospheric particles
+                drawAtmosphere();
+            };
+
+            function drawCelestialBodies() {
+                // Draw sun
+                p.push();
+                p.fill(p.lerpColor(dayColors.sun, p.color(255, 255, 255, 0), timeOfDay));
+                p.noStroke();
+                p.ellipse(sun.x, sun.y, sun.size);
+                p.pop();
+
+                // Draw moon
+                p.push();
+                p.fill(p.lerpColor(p.color(255, 255, 255, 0), nightColors.moon, timeOfDay));
+                p.noStroke();
+                p.ellipse(moon.x, moon.y, moon.size);
+                
+                // Moon phases
+                p.fill(p.lerpColor(nightColors.skyTop, p.color(0, 0, 0, 0), timeOfDay));
+                p.ellipse(moon.x + moon.size/4 * (1 - timeOfDay*2), moon.y, moon.size);
+                p.pop();
+            }
+
+            function updateFlowers() {
+                for (let flower of flowers) {
+                    // Grow flowers
+                    if (flower.growth < flower.maxGrowth) {
+                        flower.growth += 0.001;
+                    }
+
+                    // Draw flower
+                    p.push();
+                    p.translate(flower.x, flower.y);
+                    
+                    // Stem
+                    p.stroke(50, 120, 50);
+                    p.strokeWeight(2);
+                    p.line(0, 0, 0, flower.stemHeight * flower.growth);
+                    
+                    // Flower head
+                    p.translate(0, flower.stemHeight * flower.growth);
+                    p.noStroke();
+                    p.fill(flower.color);
+                    
+                    if (flower.type === 'daisy') {
+                        // Center
+                        p.fill(255, 255, 150);
+                        p.ellipse(0, 0, 10 * flower.size * flower.growth);
+                        
+                        // Petals
+                        p.fill(255, 255, 255, 200);
+                        for (let i = 0; i < 12; i++) {
+                            p.push();
+                            p.rotate(p.TWO_PI * i / 12);
+                            p.ellipse(12 * flower.size * flower.growth, 0, 15 * flower.size * flower.growth, 5 * flower.size * flower.growth);
+                            p.pop();
+                        }
+                    } else if (flower.type === 'tulip') {
+                        p.ellipse(0, -5 * flower.size * flower.growth, 15 * flower.size * flower.growth, 20 * flower.size * flower.growth);
+                    } else { // violet
+                        p.ellipse(0, 0, 15 * flower.size * flower.growth);
+                    }
+                    
+                    p.pop();
+                }
+            }
+
+            function updateCarrots() {
+                for (let i = carrots.length - 1; i >= 0; i--) {
+                    let carrot = carrots[i];
+                    
+                    // Grow carrots
+                    if (carrot.growth < 1) {
+                        carrot.growth += 0.002;
+                    }
+                    
+                    // Draw carrot
+                    p.push();
+                    p.translate(carrot.x, carrot.y);
+                    
+                    // Leaves
+                    p.fill(100, 200, 100);
+                    p.noStroke();
+                    for (let j = 0; j < 3; j++) {
+                        p.push();
+                        p.rotate(p.TWO_PI * j / 3 + p.sin(p.frameCount/30) * 0.2);
+                        p.ellipse(0, -carrot.size * carrot.growth, 5, 15 * carrot.growth);
+                        p.pop();
+                    }
+                    
+                    // Carrot
+                    p.fill(255, 150, 100);
+                    p.ellipse(0, 0, 10 * carrot.growth, carrot.size * carrot.growth);
+                    
+                    p.pop();
+                    
+                    // Check if rabbit is near carrot
+                    if (p.dist(rabbit.x, rabbit.y, carrot.x, carrot.y) < 30 && carrot.growth > 0.8) {
+                        // Rabbit eats carrot
+                        carrots.splice(i, 1);
+                        rabbit.isHopping = true;
+                    }
+                }
+            }
+
+            function updateButterflies() {
+                for (let butterfly of butterflies) {
+                    // Update wing animation
+                    butterfly.wingAngle += butterfly.wingSpeed;
+                    
+                    // Move toward target flower
+                    if (flowers.length > 0 && butterfly.targetFlower < flowers.length) {
+                        let target = flowers[butterfly.targetFlower];
+                        let angleToFlower = p.atan2(target.y - butterfly.y, target.x - butterfly.x);
+                        butterfly.angle = p.lerp(butterfly.angle, angleToFlower, 0.05);
+                        
+                        // Change target occasionally
+                        if (p.random() < 0.01) {
+                            butterfly.targetFlower = p.floor(p.random(flowers.length));
+                        }
+                    }
+                    
+                    butterfly.x += p.cos(butterfly.angle) * butterfly.speed;
+                    butterfly.y += p.sin(butterfly.angle) * butterfly.speed;
+                    
+                    // Wrap around screen edges
+                    if (butterfly.x < -butterfly.size) butterfly.x = p.width + butterfly.size;
+                    if (butterfly.x > p.width + butterfly.size) butterfly.x = -butterfly.size;
+                    if (butterfly.y < -butterfly.size) butterfly.y = p.height + butterfly.size;
+                    if (butterfly.y > p.height + butterfly.size) butterfly.y = -butterfly.size;
+                    
+                    // Draw butterfly
+                    p.push();
+                    p.translate(butterfly.x, butterfly.y);
+                    p.rotate(butterfly.angle);
+                    
+                    // Body
+                    p.fill(butterfly.color);
+                    p.ellipse(0, 0, butterfly.size/2, butterfly.size);
+                    
+                    // Wings
+                    p.noStroke();
+                    let wingSize = butterfly.size * 1.2;
+                    let wingY = p.sin(butterfly.wingAngle) * 5;
+                    
+                    // Upper wings
+                    p.fill(butterfly.color);
+                    p.ellipse(-wingSize/3, wingY - wingSize/4, wingSize, wingSize/2);
+                    p.ellipse(wingSize/3, wingY - wingSize/4, wingSize, wingSize/2);
+                    
+                    // Lower wings
+                    p.fill(p.lerpColor(butterfly.color, p.color(255), 0.3));
+                    p.ellipse(-wingSize/3, wingY + wingSize/4, wingSize, wingSize/2);
+                    p.ellipse(wingSize/3, wingY + wingSize/4, wingSize, wingSize/2);
+                    
+                    p.pop();
+                }
+                
+                // Occasionally add new butterflies when there are many flowers
+                if (flowers.length > 15 && butterflies.length < 10 && p.random() < 0.005) {
+                    createButterfly();
+                }
+            }
+
+            function updateRabbit() {
+                // Update rabbit target based on mouse
+                if (p.dist(p.mouseX, p.mouseY, rabbit.x, rabbit.y) < 150) {
+                    // Move toward mouse if close enough
+                    rabbit.targetX = p.lerp(rabbit.targetX, p.mouseX, 0.05);
+                    rabbit.targetY = p.lerp(rabbit.targetY, p.mouseY, 0.05);
+                } else {
+                    // Wander behavior
+                    if (p.random() < 0.01) {
+                        rabbit.targetX += p.random(-100, 100);
+                        rabbit.targetY += p.random(-50, 50);
+                    }
+                    
+                    // Stay within bounds
+                    rabbit.targetX = p.constrain(rabbit.targetX, 50, p.width-50);
+                    rabbit.targetY = p.constrain(rabbit.targetY, p.height/2, p.height-50);
+                }
+                
+                // Move toward target
+                let angleToTarget = p.atan2(rabbit.targetY - rabbit.y, rabbit.targetX - rabbit.x);
+                rabbit.x += p.cos(angleToTarget) * rabbit.speed;
+                rabbit.y += p.sin(angleToTarget) * rabbit.speed;
+                
+                // Hop animation
+                if (p.dist(rabbit.x, rabbit.y, rabbit.targetX, rabbit.targetY) < 10) {
+                    rabbit.isHopping = false;
+                } else if (p.frameCount % 20 === 0) {
+                    rabbit.isHopping = true;
+                }
+                
+                if (rabbit.isHopping) {
+                    rabbit.earAngle = p.sin(p.frameCount/5) * 0.3;
+                    rabbit.hopHeight = p.abs(p.sin(p.frameCount/5)) * 10;
+                } else {
+                    rabbit.earAngle = p.lerp(rabbit.earAngle, 0, 0.1);
+                    rabbit.hopHeight = p.lerp(rabbit.hopHeight, 0, 0.1);
+                }
+                
+                // Draw rabbit
+                p.push();
+                p.translate(rabbit.x, rabbit.y - rabbit.hopHeight);
+                
+                // Body
+                p.fill(220, 220, 220);
+                p.noStroke();
+                p.ellipse(0, 0, rabbit.size, rabbit.size * 0.8);
+                
+                // Head
+                p.ellipse(0, -rabbit.size/3, rabbit.size * 0.6, rabbit.size * 0.5);
+                
+                // Ears
+                p.push();
+                p.translate(-rabbit.size/4, -rabbit.size/2);
+                p.rotate(-rabbit.earAngle);
+                p.ellipse(0, 0, rabbit.size/4, rabbit.size/2);
+                p.fill(240, 200, 200);
+                p.ellipse(0, rabbit.size/8, rabbit.size/8, rabbit.size/3);
+                p.pop();
+                
+                p.push();
+                p.translate(rabbit.size/4, -rabbit.size/2);
+                p.rotate(rabbit.earAngle);
+                p.fill(220, 220, 220);
+                p.ellipse(0, 0, rabbit.size/4, rabbit.size/2);
+                p.fill(240, 200, 200);
+                p.ellipse(0, rabbit.size/8, rabbit.size/8, rabbit.size/3);
+                p.pop();
+                
+                // Eyes
+                p.fill(50);
+                p.ellipse(-rabbit.size/8, -rabbit.size/3, rabbit.size/10);
+                p.ellipse(rabbit.size/8, -rabbit.size/3, rabbit.size/10);
+                
+                // Nose
+                p.fill(240, 180, 180);
+                p.ellipse(0, -rabbit.size/4, rabbit.size/8);
+                
+                // Whiskers
+                p.stroke(150);
+                p.strokeWeight(1);
+                for (let i = -1; i <= 1; i++) {
+                    p.line(rabbit.size/12, -rabbit.size/4, rabbit.size/4, -rabbit.size/4 + i * rabbit.size/12);
+                    p.line(-rabbit.size/12, -rabbit.size/4, -rabbit.size/4, -rabbit.size/4 + i * rabbit.size/12);
+                }
+                
+                p.pop();
+            }
+
+            function drawAtmosphere() {
+                // Draw some atmospheric effects based on time of day
+                p.push();
+                p.noStroke();
+                
+                // Daytime - sun rays
+                if (timeOfDay < 0.5) {
+                    p.fill(255, 255, 200, 20 * (1 - timeOfDay*2));
+                    for (let i = 0; i < 5; i++) {
+                        let angle = p.TWO_PI * i / 5 + p.frameCount/100;
+                        let length = p.width/2;
+                        p.triangle(
+                            sun.x, sun.y,
+                            sun.x + p.cos(angle) * length, sun.y + p.sin(angle) * length,
+                            sun.x + p.cos(angle + 0.2) * length, sun.y + p.sin(angle + 0.2) * length
+                        );
+                    }
+                }
+                
+                // Nighttime - stars
+                else {
+                    p.fill(255, 255, 255, 200 * (timeOfDay-0.5)*2);
+                    for (let i = 0; i < 50; i++) {
+                        let x = (p.noise(i, p.frameCount/200) * p.width) % p.width;
+                        let y = (p.noise(i+100, p.frameCount/200) * p.height/2) % p.height/2;
+                        let size = p.noise(i+200) * 3;
+                        p.ellipse(x, y, size);
+                    }
+                }
+                
+                p.pop();
+            }
+
+            p.mousePressed = () => {
+                if (p.mouseY > p.height/2) { // Only plant in ground area
+                    plantCarrot(p.mouseX, p.mouseY);
+                }
+            };
+
+            p.windowResized = () => {
+                p.resizeCanvas(p.min(p.windowWidth, 1200), 600);
+                createGradients();
+            };
+        };
+
+        new p5(pastoralSketch);
+    </script>
+
+              
+          
+                
+          
+              
